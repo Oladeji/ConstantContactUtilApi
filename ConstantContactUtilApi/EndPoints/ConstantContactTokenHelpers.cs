@@ -6,19 +6,33 @@ public static class ConstantContactTokenHelpers
 {
 
 
-    static string clientId = "";
-    static string clientSecret = "";
-    static string redirectUri = "http://localhost:5176/oauth/callback";
-    static string constantContactTokenEndpoint = "https://authz.constantcontact.com/oauth2/default/v1/token";
-    static string dbPath = "Data Source=tokenstore.db";
+
+    //static string clientId = "";
+    //static string clientSecret = "";
+    //static string redirectUri = "http://localhost:5176/oauth/callback";
+    //static string constantContactTokenEndpoint = "https://authz.constantcontact.com/oauth2/default/v1/token";
+    //static string dbPath = "Data Source=tokenstore.db";
 
     // In-memory token store for demo
     //string? refreshToken = null;
 
-   // static string clientId = "<YOUR_CLIENT_ID>";
-   // static string clientSecret = "<YOUR_CLIENT_SECRET>";
+    // static string clientId = "<YOUR_CLIENT_ID>";
+    // static string clientSecret = "<YOUR_CLIENT_SECRET>";
 
-
+    private static void EnsureTokensTableExists()
+    {
+        using var connection = new SqliteConnection(dbPath);
+        connection.Open();
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+        CREATE TABLE IF NOT EXISTS Tokens (
+            UserId TEXT PRIMARY KEY,
+            AccessToken TEXT,
+            RefreshToken TEXT,
+            Expiry INTEGER
+        );";
+        cmd.ExecuteNonQuery();
+    }
     public static TokenResponse? ExchangeCodeForToken(
         string code,
         string clientId,
@@ -131,14 +145,16 @@ public static class ConstantContactTokenHelpers
     public static void  SaveToken(TokenResponse? tokenResponse, string userId)
     {
         if (tokenResponse is null) return;
+   
 
+        EnsureTokensTableExists(); // Ensure table exists
         using var connection = new SqliteConnection(dbPath);
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText = "REPLACE INTO Tokens (UserId, AccessToken, RefreshToken, Expiry) VALUES ($user, $access, $refresh, $expiry);";
         cmd.Parameters.AddWithValue("$user", userId);
         cmd.Parameters.AddWithValue("$access", tokenResponse.access_token);
-        cmd.Parameters.AddWithValue("$refresh", tokenResponse.refresh_token);
+        cmd.Parameters.AddWithValue("$refresh", (object?)tokenResponse.refresh_token ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$expiry", DateTimeOffset.UtcNow.ToUnixTimeSeconds() + tokenResponse.expires_in);
         cmd.ExecuteNonQuery();
     }
@@ -173,7 +189,7 @@ public static class ConstantContactTokenHelpers
     //        reader.GetInt64(2)
     //    );
     //}
-    public static TokenResponse? ExchangeCodeForTokenAsync(string code)
+    public static async Task<(TokenResponse?, ResponseType)> ExchangeCodeForTokenAsync(string code)
     {
         using var client = new HttpClient();
         var values = new Dictionary<string, string>
@@ -186,10 +202,24 @@ public static class ConstantContactTokenHelpers
     };
 
         var content = new FormUrlEncodedContent(values);
-        var response = client.PostAsync(constantContactTokenEndpoint, content).Result;
+        var response = await client.PostAsync(constantContactTokenEndpoint, content);
         var body = response.Content.ReadAsStringAsync().Result;
-        return response.IsSuccessStatusCode
-            ? JsonSerializer.Deserialize<TokenResponse>(body)
-            : null;
+        //return response.IsSuccessStatusCode
+        //    ? JsonSerializer.Deserialize<TokenResponse>(body)
+        //    : null;
+
+        if (response.IsSuccessStatusCode)
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(body, options);
+            return (tokenResponse, new ResponseType(true, ""));
+        }
+        else
+        {
+           // var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(body);
+           // if (tokenResponse is null) return (null, new ResponseType(false, "Failed to deserialize token response"));
+          //  SaveToken(tokenResponse, code); // Assuming code is userId for simplicity
+            return (null, new ResponseType(false, response.ReasonPhrase));
+        }
     }
 }

@@ -66,9 +66,9 @@ public static class ConstantContactEndpoints
         //    return Results.Content(result, "application/json");
         //});
 
-        app.MapPost("/api/contacts/create", async (ContactDto contact, string userId) =>
+        app.MapPost("/api/contacts/create", async (ContactDto contact) =>
         {
-            var token = await ConstantContactTokenHelpers.EnsureValidTokenAsync(userId);
+            var token = await ConstantContactTokenHelpers.EnsureValidTokenAsync(contact.UserId);
             if (token is null) return Results.Unauthorized();
 
             using var httpClient = new HttpClient();
@@ -79,7 +79,8 @@ public static class ConstantContactEndpoints
                 email_address = new { address = contact.Email },
                 first_name = contact.FirstName,
                 last_name = contact.LastName,
-                list_memberships = new[] { "<YOUR_LIST_ID>" }
+                create_source= "Account",
+                // list_memberships = new[] { "<YOUR_LIST_ID>" }
             };
 
             var json = JsonSerializer.Serialize(payload);
@@ -121,11 +122,18 @@ public static class ConstantContactEndpoints
             var form = await request.ReadFromJsonAsync<AuthCodeDto>();
             if (form?.Code is null || string.IsNullOrEmpty(form.UserId)) return Results.BadRequest("Missing code or userId");
 
-            var tokenResponse =  ConstantContactTokenHelpers.ExchangeCodeForTokenAsync(form.Code);
-            if (tokenResponse is null) return Results.BadRequest("Token exchange failed");
+            var (tokenResponse, response) = await ConstantContactTokenHelpers.ExchangeCodeForTokenAsync(form.Code);
 
+
+            if (response.OkResponse)
+            { 
             ConstantContactTokenHelpers.SaveToken(tokenResponse, form.UserId);
             return Results.Ok(tokenResponse);
+            }
+            else
+            {
+                return Results.BadRequest(response.ErrorMsg);
+            }
         });
     }
         
