@@ -66,9 +66,9 @@ public static class ConstantContactEndpoints
         //    return Results.Content(result, "application/json");
         //});
 
-        app.MapPost("/api/contacts/create", async (ContactDto contact) =>
+        app.MapPost("/api/contacts/create", async (ContactDto contact, string UserId) =>
         {
-            var token = await ConstantContactTokenHelpers.EnsureValidTokenAsync(contact.UserId);
+            var token = await ConstantContactTokenHelpers.EnsureValidTokenAsync(UserId);
             if (token is null) return Results.Unauthorized();
 
             using var httpClient = new HttpClient();
@@ -135,6 +135,13 @@ public static class ConstantContactEndpoints
                 return Results.BadRequest(response.ErrorMsg);
             }
         });
+        app.MapPost("/api/auth/logout", (string userId) =>
+        {
+            // /api/auth/logout?userId=123
+            int affected = ConstantContactTokenHelpers.LogUserTokenOut(userId  );
+            return affected > 0 ? Results.Ok("Logged out") : Results.NotFound("User not found");
+        });
     }
-        
+
+
 }

@@ -1,7 +1,7 @@
 ﻿namespace ConstantContactUtilApi.EndPoints
 {
   
-     public    record ContactDto(string Email, string FirstName, string LastName, string UserId);
+     public    record ContactDto(string Email, string FirstName, string LastName);
   //  public record AuthCodeDto(string Code);
     public record TokenResponse(string access_token, string? refresh_token, int expires_in);
     public record ResponseType(bool OkResponse, string ErrorMsg="");

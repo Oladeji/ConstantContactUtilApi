@@ -6,7 +6,6 @@ public static class ConstantContactTokenHelpers
 {
 
 
-
     //static string clientId = "";
     //static string clientSecret = "";
     //static string redirectUri = "http://localhost:5176/oauth/callback";
@@ -80,7 +79,12 @@ public static class ConstantContactTokenHelpers
         var content = new FormUrlEncodedContent(form);
         var response = await client.PostAsync(constantContactTokenEndpoint, content);
         var body = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode) return null;
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine("Refresh failed: " + response.StatusCode + " - " + body);
+            // If refresh fails (e.g., expired), signal the need to re-login
+            return null;
+        }
 
         var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(body);
         SaveToken(tokenResponse, userId);
@@ -173,6 +177,18 @@ public static class ConstantContactTokenHelpers
             reader.IsDBNull(1) ? null : reader.GetString(1),
             reader.GetInt64(2)
         );
+    }
+
+
+    public static int LogUserTokenOut(string userId)
+    {
+        using var connection = new SqliteConnection(dbPath);
+        connection.Open();
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM Tokens WHERE UserId = $user";
+        cmd.Parameters.AddWithValue("$user", userId);
+        int affected = cmd.ExecuteNonQuery();
+        return affected;
     }
     //public static AccessTokenEntry? GetToken(string userId, string dbPath)
     //{
